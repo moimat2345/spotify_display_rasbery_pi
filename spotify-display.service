@@ -1,0 +1,17 @@
+[Unit]
+Description=Spotify Now Playing Display
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/spotify_display_rasbery_pi
+Environment=SDL_VIDEODRIVER=fbcon
+Environment=SDL_FBDEV=/dev/fb1
+ExecStart=/home/pi/spotify_display_rasbery_pi/venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
