@@ -14,7 +14,7 @@ class SpotifyClient:
         self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
             client_id=os.getenv("SPOTIPY_CLIENT_ID"),
             client_secret=os.getenv("SPOTIPY_CLIENT_SECRET"),
-            redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI", "http://localhost:8888/callback"),
+            redirect_uri=os.getenv("SPOTIPY_REDIRECT_URI", "https://localhost:8888/callback"),
             scope=SCOPES,
             cache_path=".spotify_cache",
         ))

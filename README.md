@@ -27,7 +27,7 @@ Affiche la pochette de la chanson en cours sur un écran TFT 3.5" SPI connecté 
 
 1. Aller sur https://developer.spotify.com/dashboard
 2. Créer une application
-3. Ajouter `http://localhost:8888/callback` comme Redirect URI
+3. Ajouter `https://localhost:8888/callback` comme Redirect URI
 4. Noter le Client ID et Client Secret
 
 ### 2. Installer sur le Pi
@@ -49,7 +49,7 @@ Remplir :
 ```
 SPOTIPY_CLIENT_ID=votre_client_id
 SPOTIPY_CLIENT_SECRET=votre_client_secret
-SPOTIPY_REDIRECT_URI=http://localhost:8888/callback
+SPOTIPY_REDIRECT_URI=https://localhost:8888/callback
 ```
 
 ### 4. Première autorisation
