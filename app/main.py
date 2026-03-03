@@ -51,6 +51,9 @@ class App:
         signal.signal(signal.SIGTERM, self._handle_signal)
         signal.signal(signal.SIGINT, self._handle_signal)
 
+        # Auth FIRST (may need user input), before display/touch
+        self.spotify.ensure_auth()
+
         self.display.init()
         self.touch.start()
 
