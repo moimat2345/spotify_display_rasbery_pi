@@ -2,8 +2,7 @@ import io
 import logging
 import os
 
-import pygame
-from PIL import Image, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +13,7 @@ DARKEN_FACTOR = 0.4  # 0 = full black, 1 = no darkening
 
 
 def create_display_image(cover_bytes, screen_size=(SCREEN_WIDTH, SCREEN_HEIGHT)):
-    """Build a pygame Surface with blurred background + centered cover art."""
+    """Build a PIL Image with blurred background + centered cover art."""
     cover = Image.open(io.BytesIO(cover_bytes)).convert("RGB")
 
     # --- Background: stretch to screen, blur, darken ---
@@ -29,38 +28,35 @@ def create_display_image(cover_bytes, screen_size=(SCREEN_WIDTH, SCREEN_HEIGHT))
     cy = (screen_size[1] - cover.height) // 2
     bg.paste(cover, (cx, cy))
 
-    # --- Convert to pygame Surface ---
-    raw = bg.tobytes()
-    surface = pygame.image.fromstring(raw, screen_size, "RGB")
-    return surface
+    return bg
 
 
 def create_idle_screen(screen_size=(SCREEN_WIDTH, SCREEN_HEIGHT)):
-    """Black screen with Spotify logo centered (or just a green circle fallback)."""
-    surface = pygame.Surface(screen_size)
-    surface.fill((0, 0, 0))
+    """Black screen with Spotify logo centered (or green circle fallback)."""
+    img = Image.new("RGB", screen_size, (0, 0, 0))
 
     logo_path = os.path.join(os.path.dirname(__file__), "..", "assets", "spotify_logo.png")
     if os.path.exists(logo_path):
         try:
-            logo = pygame.image.load(logo_path).convert_alpha()
-            # Scale logo to fit nicely (max 80px height)
-            ratio = min(80 / logo.get_height(), 80 / logo.get_width())
-            new_size = (int(logo.get_width() * ratio), int(logo.get_height() * ratio))
-            logo = pygame.transform.smoothscale(logo, new_size)
-            x = (screen_size[0] - logo.get_width()) // 2
-            y = (screen_size[1] - logo.get_height()) // 2
-            surface.blit(logo, (x, y))
+            logo = Image.open(logo_path).convert("RGBA")
+            ratio = min(80 / logo.height, 80 / logo.width)
+            new_size = (int(logo.width * ratio), int(logo.height * ratio))
+            logo = logo.resize(new_size, Image.LANCZOS)
+            x = (screen_size[0] - logo.width) // 2
+            y = (screen_size[1] - logo.height) // 2
+            img.paste(logo, (x, y), logo)
         except Exception as e:
             logger.warning("Could not load logo: %s", e)
-            _draw_fallback_logo(surface, screen_size)
+            _draw_fallback_logo(img, screen_size)
     else:
-        _draw_fallback_logo(surface, screen_size)
+        _draw_fallback_logo(img, screen_size)
 
-    return surface
+    return img
 
 
-def _draw_fallback_logo(surface, screen_size):
+def _draw_fallback_logo(img, screen_size):
     """Draw a simple green circle as Spotify logo placeholder."""
+    draw = ImageDraw.Draw(img)
     cx, cy = screen_size[0] // 2, screen_size[1] // 2
-    pygame.draw.circle(surface, (30, 215, 96), (cx, cy), 30)
+    r = 30
+    draw.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(30, 215, 96))

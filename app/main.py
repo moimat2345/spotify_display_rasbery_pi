@@ -1,9 +1,9 @@
 import logging
+import os
+import platform
 import signal
-import sys
 import time
 
-import pygame
 import requests
 from dotenv import load_dotenv
 
@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL = 2.5  # seconds
 
 
+def _is_desktop():
+    return platform.system() != "Linux" or os.environ.get("DISPLAY")
+
+
 class App:
     def __init__(self):
         self.display = Display()
@@ -30,6 +34,7 @@ class App:
         self.touch = TouchController(callback=self._on_touch)
         self.current_track_id = None
         self.running = True
+        self._force_poll = False
 
     def _on_touch(self, action):
         """Handle touch events from the touch controller."""
@@ -40,7 +45,6 @@ class App:
             self.spotify.play_pause()
         elif action == "next":
             self.spotify.next_track()
-        # Force a poll on next loop iteration
         self._force_poll = True
 
     def run(self):
@@ -49,29 +53,27 @@ class App:
 
         self.display.init()
         self.touch.start()
-        self._force_poll = False
 
         logger.info("Spotify Display started")
-        idle_surface = create_idle_screen()
+        idle_image = create_idle_screen()
 
         try:
             while self.running:
-                self._process_pygame_events()
+                if _is_desktop():
+                    self._process_pygame_events()
 
                 track = self.spotify.get_current_track()
 
                 if track is None:
-                    # Nothing playing
                     if self.current_track_id is not None:
-                        self.display.show_image(idle_surface)
+                        self.display.show_image(idle_image)
                         self.current_track_id = None
                         logger.info("No playback — idle screen")
                 elif track["track_id"] != self.current_track_id:
-                    # New track
                     logger.info("Now playing: %s — %s", track["title"], track["artist"])
-                    surface = self._download_and_render(track["cover_url"])
-                    if surface:
-                        self.display.show_image(surface)
+                    image = self._download_and_render(track["cover_url"])
+                    if image:
+                        self.display.show_image(image)
                     self.current_track_id = track["track_id"]
 
                 self._force_poll = False
@@ -83,7 +85,7 @@ class App:
             self._cleanup()
 
     def _download_and_render(self, cover_url):
-        """Download cover art and create display surface."""
+        """Download cover art and create display image."""
         if not cover_url:
             return None
         try:
@@ -95,7 +97,8 @@ class App:
             return None
 
     def _process_pygame_events(self):
-        """Drain pygame events to prevent freezing."""
+        """Drain pygame events to prevent freezing (desktop only)."""
+        import pygame
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
