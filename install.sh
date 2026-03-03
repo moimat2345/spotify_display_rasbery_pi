@@ -10,6 +10,7 @@ sudo apt-get install -y \
     python3-pip \
     python3-venv \
     python3-pygame \
+    python3-evdev \
     libsdl2-dev \
     libsdl2-image-dev \
     libjpeg-dev \
@@ -17,7 +18,7 @@ sudo apt-get install -y \
 
 # Python venv
 echo "[2/4] Setting up Python virtual environment..."
-python3 -m venv venv
+python3 -m venv --system-site-packages venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
