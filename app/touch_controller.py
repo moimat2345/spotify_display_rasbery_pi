@@ -68,6 +68,18 @@ class TouchController:
         if not device:
             return
 
+        # Get the actual range of X coordinates from the device
+        abs_info = device.capabilities().get(ecodes.EV_ABS, [])
+        x_max = 480  # default
+        for code, info in abs_info:
+            if code == ecodes.ABS_X:
+                if hasattr(info, 'max'):
+                    x_max = info.max
+                elif isinstance(info, tuple) and len(info) > 1:
+                    x_max = info[1]
+                logger.info("Touch X range: 0-%d (will scale to 0-480)", x_max)
+                break
+
         touch_x = None
         touch_down_time = None
 
@@ -78,7 +90,10 @@ class TouchController:
 
                 # Track X coordinate
                 if event.type == ecodes.EV_ABS and event.code == ecodes.ABS_X:
-                    touch_x = event.value
+                    raw_x = event.value
+                    # Scale to screen coordinates (0-480)
+                    touch_x = int((raw_x / x_max) * 480)
+                    logger.debug("Touch X: raw=%d, scaled=%d", raw_x, touch_x)
 
                 # Touch down
                 if event.type == ecodes.EV_KEY and event.code == ecodes.BTN_TOUCH:
