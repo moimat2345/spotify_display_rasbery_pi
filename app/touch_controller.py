@@ -6,12 +6,11 @@ import time
 logger = logging.getLogger(__name__)
 
 # Touch zones on 480px-wide screen
-ZONE_PREV = 160       # x < 160 → previous (double tap)
-ZONE_PLAY = 320       # 160 <= x < 320 → play/pause (single tap)
-                      # x >= 320 → next (double tap)
+SCREEN_MIDDLE = 240   # Split screen in half for double tap detection
 
 TAP_TIMEOUT = 0.4     # Max seconds between touch down and up for a tap
-DOUBLE_TAP_TIMEOUT = 0.5  # Max seconds between two taps for double tap
+DOUBLE_TAP_TIMEOUT = 0.3  # Max seconds between two taps for double tap
+SINGLE_TAP_DELAY = 0.35  # Wait time to confirm it's a single tap
 
 
 class TouchController:
@@ -26,7 +25,7 @@ class TouchController:
         self._thread = None
         self._last_tap_time = None
         self._last_tap_x = None
-        self._pending_timer = None
+        self._single_tap_timer = None
 
     def start(self):
         if platform.system() != "Linux":
@@ -39,6 +38,9 @@ class TouchController:
 
     def stop(self):
         self._running = False
+        if self._single_tap_timer:
+            self._single_tap_timer.cancel()
+            self._single_tap_timer = None
         if self._thread:
             self._thread.join(timeout=2)
 
@@ -108,38 +110,49 @@ class TouchController:
             logger.error("Touch controller error: %s", e)
 
     def _handle_tap(self, x):
-        """Map x coordinate to action based on single/double tap and zone."""
+        """
+        Map x coordinate to action:
+        - Double tap left half → previous
+        - Double tap right half → next
+        - Single tap anywhere → play/pause
+        """
         now = time.monotonic()
 
-        # Determine zone
-        if x < ZONE_PREV:
-            zone = "left"
-        elif x < ZONE_PLAY:
-            zone = "middle"
-        else:
-            zone = "right"
+        # Check if this is a double tap
+        if self._last_tap_time and (now - self._last_tap_time) < DOUBLE_TAP_TIMEOUT:
+            # Cancel the pending single tap timer
+            if self._single_tap_timer:
+                self._single_tap_timer.cancel()
+                self._single_tap_timer = None
 
-        # Middle zone: single tap → play/pause (immediate)
-        if zone == "middle":
-            logger.debug("Single tap at x=%d (middle) → play_pause", x)
-            self.callback("play_pause")
+            # Determine action based on which half of the screen
+            if x < SCREEN_MIDDLE:
+                action = "previous"
+                logger.debug("Double tap at x=%d (left) → previous", x)
+            else:
+                action = "next"
+                logger.debug("Double tap at x=%d (right) → next", x)
+
+            self.callback(action)
+            self._last_tap_time = None
+            self._last_tap_x = None
             return
 
-        # Left/Right zones: require double tap
-        if self._last_tap_time and (now - self._last_tap_time) < DOUBLE_TAP_TIMEOUT:
-            # Check if it's the same zone
-            if self._last_tap_x is not None:
-                last_zone = "left" if self._last_tap_x < ZONE_PREV else "right"
-                if last_zone == zone:
-                    # Double tap detected!
-                    action = "previous" if zone == "left" else "next"
-                    logger.debug("Double tap at x=%d (%s) → %s", x, zone, action)
-                    self.callback(action)
-                    self._last_tap_time = None
-                    self._last_tap_x = None
-                    return
-
-        # First tap in left/right zone - remember it
-        logger.debug("First tap at x=%d (%s), waiting for double tap...", x, zone)
+        # First tap - schedule a single tap action
+        logger.debug("First tap at x=%d, waiting to confirm single/double...", x)
         self._last_tap_time = now
         self._last_tap_x = x
+
+        # Schedule single tap action (will be cancelled if double tap occurs)
+        if self._single_tap_timer:
+            self._single_tap_timer.cancel()
+
+        self._single_tap_timer = threading.Timer(SINGLE_TAP_DELAY, self._handle_single_tap)
+        self._single_tap_timer.start()
+
+    def _handle_single_tap(self):
+        """Called after delay to confirm it's a single tap."""
+        logger.debug("Single tap confirmed → play_pause")
+        self.callback("play_pause")
+        self._last_tap_time = None
+        self._last_tap_x = None
