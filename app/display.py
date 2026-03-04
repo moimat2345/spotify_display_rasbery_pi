@@ -95,7 +95,8 @@ class Display:
         self._backend.init()
 
     def show_image(self, pil_image):
-        self._backend.show_image(pil_image)
+        rotated_image = pil_image.rotate(180)
+        self._backend.show_image(rotated_image)
 
     def show_black(self):
         self._backend.show_black()

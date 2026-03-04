@@ -6,11 +6,12 @@ import time
 logger = logging.getLogger(__name__)
 
 # Touch zones on 480px-wide screen
-ZONE_PREV = 160       # x < 160 → previous
-ZONE_PLAY = 320       # 160 <= x < 320 → play/pause
-                      # x >= 320 → next
+ZONE_PREV = 160       # x < 160 → previous (double tap)
+ZONE_PLAY = 320       # 160 <= x < 320 → play/pause (single tap)
+                      # x >= 320 → next (double tap)
 
 TAP_TIMEOUT = 0.4     # Max seconds between touch down and up for a tap
+DOUBLE_TAP_TIMEOUT = 0.5  # Max seconds between two taps for double tap
 
 
 class TouchController:
@@ -23,6 +24,9 @@ class TouchController:
         self.callback = callback
         self._running = False
         self._thread = None
+        self._last_tap_time = None
+        self._last_tap_x = None
+        self._pending_timer = None
 
     def start(self):
         if platform.system() != "Linux":
@@ -89,12 +93,38 @@ class TouchController:
             logger.error("Touch controller error: %s", e)
 
     def _handle_tap(self, x):
-        """Map x coordinate to action."""
+        """Map x coordinate to action based on single/double tap and zone."""
+        now = time.monotonic()
+
+        # Determine zone
         if x < ZONE_PREV:
-            action = "previous"
+            zone = "left"
         elif x < ZONE_PLAY:
-            action = "play_pause"
+            zone = "middle"
         else:
-            action = "next"
-        logger.debug("Tap at x=%d → %s", x, action)
-        self.callback(action)
+            zone = "right"
+
+        # Middle zone: single tap → play/pause (immediate)
+        if zone == "middle":
+            logger.debug("Single tap at x=%d (middle) → play_pause", x)
+            self.callback("play_pause")
+            return
+
+        # Left/Right zones: require double tap
+        if self._last_tap_time and (now - self._last_tap_time) < DOUBLE_TAP_TIMEOUT:
+            # Check if it's the same zone
+            if self._last_tap_x is not None:
+                last_zone = "left" if self._last_tap_x < ZONE_PREV else "right"
+                if last_zone == zone:
+                    # Double tap detected!
+                    action = "previous" if zone == "left" else "next"
+                    logger.debug("Double tap at x=%d (%s) → %s", x, zone, action)
+                    self.callback(action)
+                    self._last_tap_time = None
+                    self._last_tap_x = None
+                    return
+
+        # First tap in left/right zone - remember it
+        logger.debug("First tap at x=%d (%s), waiting for double tap...", x, zone)
+        self._last_tap_time = now
+        self._last_tap_x = x
